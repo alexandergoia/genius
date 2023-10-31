@@ -1,0 +1,74 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <title>Angel</title>
+  </head>
+  <body>
+    <div align="center"><font size="+3"><br>
+        Angel System Call in Unix (FreeBSD and Linux)<br>
+        by Alexandru Goia, Unix hobbyist<br>
+        2015-2017, 2022-2023<br>
+        <br>
+      </font>
+      <div align="left"><font size="+3">It has been told, in UNIX dogma
+          and religion, that SIGKILL/SIGSTOP signals cannot be<br>
+          masked, blocked, ignored or caught. But you can negate in a
+          superior way this truth,<br>
+          by access to the Final Truth, that is - the kernel sources.<br>
+          <br>
+          So I gave birth to a new, nice system call named angel(),
+	  syscall(335) on Linux 4 or 5 or 6.<br>
+	  And syscall(576) on FreeBSD 12.4.<br>
+          <br>
+          Using this system call makes your process immortal, ending
+          only with exit() or return.<br>
+          Other processes and users (including root, UID 0) cannot send
+          SIGKILL/SIGSTOP to<br>
+          you.<br>
+          <br>
+          Going further, you can create angelize(pid) or angel() to be
+          used only by group angel,<br>
+          with special users.<br>
+          <br>
+          Uses : trusted programs that don't want to be interrupted.
+          Network servers, Unix<br>
+          servers, daemon processes which use daemon() system call.<br>
+          <br>
+          So, how I have done it ? Real nice and simple !<br>
+        </font><br>
+        <pre><meta http-equiv="content-type" content="text/html; charset=UTF-8"><pre>    1. Changed struct task_struct, found in/usr/src/linux/include/sched.h
+    by adding a int unix_deadly_signals; field. We want this to be 0, and
+    to be 1, only when called by sys_angel() == angel().
+    In include/linux/sched.h<br><br><pre><meta http-equiv="content-type" content="text/html; charset=UTF-8"><pre>    2. For this, we must modify do_fork() / _do_fork(), so when we obtain
+    p = copy_process(), right after it p-&gt;unix_deadly_signals = 0;
+    In kernel/fork.c<br><br><pre><meta http-equiv="content-type" content="text/html; charset=UTF-8"><pre>    3. Remember for what we have created sys_angel() : if someone sends,
+    using kill(2) system call, SIGSTOP or SIGKILL signal to our process,
+    he must fail. Look in kernel/signal.c, there is a function
+    do_sigaction(), and we modify :
+        if ((sig == SIGKILL) || (sig == SIGSTOP))
+            goto out_set; <br>	    
+	if(t -&gt; unix_deadly_signals == 1) return 0;<br><br><pre><meta http-equiv="content-type" content="text/html; charset=UTF-8"><pre>    4. In kernel/sys.c, or another file, we SYSCALL_DEFINE0(angel) {
+        current -&gt; unix_deadly_signals = 1;
+        return 0;
+    }<br><br><pre><meta http-equiv="content-type" content="text/html; charset=UTF-8"><pre>    5. In syscall_64.tbl, the 335-th system call for 334-system calls
+    original 5.xx.yy Linux kernel, is :
+        335    common        angel        sys_angel<br><br><pre><meta http-equiv="content-type" content="text/html; charset=UTF-8"><pre>    6. In include/linux/syscalls.h, add to the end of the file, right
+    before #endif,
+        asmlinkage long sys_angel(void);<br><br>    7. Compile the Linux kernel.<br><br>    8. In userspace, the following test program, against SIGKILL == 9<br>   &nbsp;and SIGSTOP == 19 :
+<pre><pre>        #include &lt;unistd.h&gt;
+        #include &lt;sys/syscall.h&gt;
+<br>	void angel() {<br>	    syscall(335);<br>	}<br>&nbsp;	<br>	int main()
+        {
+            angel();
+            sleep(66);
+            return 0;
+        }<br><br>    9.<br>   &nbsp;Compile it : $ gcc angel.c -o angel
+    Run it     : $ ./angel &amp;
+    Test it    : $ killall angel
+    It exists  : $ jobs
+<pre><pre>        [1]+ Running         ./angel &amp;<br><br>    10. Conclusion : IT WORKS.<br><br></div><div align="left"><font size="+3">Tested, tried and it works in Linux 4, 5 and 6 !<br>Successfully applied to thttpd and worked with success.<br></font>
+</div><br></pre></pre></pre></pre></pre></pre></pre></pre></pre></pre></pre></pre></pre></pre></pre></pre>
+    </div>
+  </body>
+</html>
